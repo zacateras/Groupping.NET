@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Clarans.net.src;
 
 namespace Groupping.NET.Algorithms
 {
@@ -16,17 +15,21 @@ namespace Groupping.NET.Algorithms
         private readonly int _maxNeighbour;
         private readonly int _numLocal;
 
+        public CLARANSResult Result { get; }
+
         public CLARANS(T[] items, IDistance<T> distance, int k, int maxNeighbour, int numLocal)
         {
             _distance = distance;
             _k = k;
             _maxNeighbour = maxNeighbour;
             _numLocal = numLocal;
-        }
 
-        public CLARANSResult Optimize(T[] items)
-        {
-            throw new NotImplementedException();
+            for (int i = 0; i < _numLocal; i++)
+            {
+                var result = OptimizeOne(items);
+                if (Result == null || Result.TotalDistance > result.TotalDistance)
+                    Result = result;
+            }
         }
 
         private CLARANSResult OptimizeOne(T[] items)
@@ -117,7 +120,48 @@ namespace Groupping.NET.Algorithms
 
         private double Seed(T[] items, int[] medoids, int[] clusters, double[] distances)
         {
-            return double.MaxValue;
+            int n = items.Length;
+            int k = medoids.Length;
+            medoids[0] = _random.Next(n);
+
+            Array.Fill(distances, double.MaxValue);
+
+            // pick the next center
+            for (int j = 1; j < k; j++) {
+                // Loop over the samples and compare them to the most recent center.  Store
+                // the distance from each sample to its closest center in scores.
+                for (int i = 0; i < n; i++) {
+                    // compute the distance between this sample and the current center
+                    double dist = _distance.Measure(items[i], items[medoids[j]]);
+                    if (dist < distances[i]) {
+                        distances[i] = dist;
+                        clusters[i] = j - 1;
+                    }
+                }
+
+                double cutoff = _random.NextDouble() * distances.Sum();
+                double cost = 0.0;
+                int index = 0;
+                for (; index < n; index++) {
+                    cost += distances[index];
+                    if (cost >= cutoff) {
+                        break;
+                    }
+                }
+
+                medoids[j] = index;
+            }
+
+            for (int i = 0; i < n; i++) {
+                // compute the distance between this sample and the current center
+                double dist = _distance.Measure(items[i], items[medoids[k - 1]]);
+                if (dist < distances[i]) {
+                    distances[i] = dist;
+                    clusters[i] = k - 1;
+                }
+            }
+
+            return distances.Sum();
         }
 
         public class CLARANSResult
@@ -129,11 +173,41 @@ namespace Groupping.NET.Algorithms
                 TotalDistance = totalDistance;
             }
 
-            public int[] Medoids { get; set; }
+            public int[] Medoids { get; }
 
-            public int[] Clusters { get; set; }
+            public int[] Clusters { get; }
 
-            public double TotalDistance { get; set; }
+            public double TotalDistance { get; }
+
+            public IEnumerable<CLARANSItemResult> ItemResults
+            {
+                get
+                {
+                    for (int i = 0; i < Clusters.Length; i++)
+                    {
+                        yield return new CLARANSItemResult(
+                            index: i,
+                            medoidFlag: Medoids.Any(m => m == i), 
+                            clusterNo: Clusters[i]);
+                    }
+                }
+            }
+        }
+
+        public class CLARANSItemResult
+        {
+            public CLARANSItemResult(int index, bool medoidFlag, int clusterNo)
+            {
+                Index = index;
+                MedoidFlag = medoidFlag;
+                ClusterNo = clusterNo;
+            }
+
+            public int Index { get; }
+
+            public bool MedoidFlag { get; }
+
+            public int ClusterNo { get; }
         }
     }
 }
