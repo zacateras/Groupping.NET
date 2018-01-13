@@ -53,11 +53,10 @@ namespace Groupping.NET
                 options.OutputFile = $"{options.InputFile}.out";
 
             Console.WriteLine("Reading input file.");
-            FileRecord[] records = null;
+            Record[] records = null;
             using (var streamReader = new StreamReader(options.InputFile))
+            using (var csv = new CsvReader(streamReader))
             {
-                var csv = new CsvReader(streamReader);
-
                 csv.Configuration.Delimiter = options.Delimiter;
                 csv.Configuration.HasHeaderRecord = options.HasHeaderRecord;
 
@@ -65,27 +64,26 @@ namespace Groupping.NET
             }
 
             Console.WriteLine("Executing the algorithm.");
-            var clarans = new CLARANS<FileRecord>(
+            var clarans = new CLARANS<Record>(
                 records.ToArray(),
-                new FileRecordEuclidianDistance(),
+                new RecordEuclidianDistance(),
                 options.K,
                 options.MaxNeighbour,
                 options.NumLocal);
 
             Console.WriteLine("Writing output file.");
             using (var streamWriter = new StreamWriter(options.OutputFile))
+            using (var csv = new CsvWriter(streamWriter))
             {
-                var csv = new CsvWriter(streamWriter);
-
                 csv.Configuration.Delimiter = options.Delimiter;
                 csv.Configuration.HasHeaderRecord = options.HasHeaderRecord;
 
-                csv.WriteHeader<CLARANS<FileRecord>.CLARANSItemResult>();
-                clarans?.Result?.ItemResults.ForEach(csv.WriteRecord);
+                if (clarans?.Result?.ItemResults != null)
+                    csv.WriteRecords(clarans.Result.ItemResults);
             }
         }
 
-        static IEnumerable<FileRecord> EnumerateFile(Options options, CsvReader csv)
+        static IEnumerable<Record> EnumerateFile(Options options, CsvReader csv)
         {
             if (options.HasHeaderRecord)
             {
@@ -120,7 +118,7 @@ namespace Groupping.NET
                         .Select(double.Parse)
                         .ToArray();
 
-                    yield return new FileRecord
+                    yield return new Record
                     {
                         Index = index,
                         Attributes = attributes
@@ -159,7 +157,7 @@ namespace Groupping.NET
                         .Select(double.Parse)
                         .ToArray();
 
-                    yield return new FileRecord
+                    yield return new Record
                     {
                         Index = index,
                         Attributes = attributes
