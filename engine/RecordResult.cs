@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Groupping.NET.Algorithms;
+using Newtonsoft.Json;
 
 namespace Groupping.NET
 {
@@ -24,7 +25,20 @@ namespace Groupping.NET
 
         public double ClusterDistance { get; }
 
-        public double SilhouetteIndex { get; set; }
+        public double SilhouetteIndex { get; }
+    }
+
+    public class Indicators
+    {
+        public Indicators(double totalClusterDistance, double globalSilhuetteIndex)
+        {
+            TotalClusterDistance = totalClusterDistance;
+            GlobalSilhuetteIndex = globalSilhuetteIndex;
+        }
+
+        public double TotalClusterDistance { get; }
+
+        public double GlobalSilhuetteIndex { get; }
     }
 
     public class Result<T>
@@ -37,8 +51,8 @@ namespace Groupping.NET
         private readonly int[] _clusterNums;
 
         public RecordResult[] Records { get; }
-        public double TotalClusterDistance { get; }
-        public double GlobalSilhuetteIndex { get; }
+        public Indicators Indicators { get; }
+
 
         public Result(
             T[] items,
@@ -56,8 +70,9 @@ namespace Groupping.NET
 
             Records = EnumerateRecordResults().ToArray();
 
-            TotalClusterDistance = Records.Sum(r => r.ClusterDistance);
-            GlobalSilhuetteIndex = Records.Average(r => r.SilhouetteIndex);
+            Indicators = new Indicators(
+                totalClusterDistance: Records.Sum(r => r.ClusterDistance),
+                globalSilhuetteIndex: Records.Average(r => r.SilhouetteIndex));
         }
 
         private IEnumerable<RecordResult> EnumerateRecordResults()

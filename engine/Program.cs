@@ -6,6 +6,7 @@ using CommandLine;
 using CsvHelper;
 using Groupping.NET.Algorithms;
 using MoreLinq;
+using Newtonsoft.Json;
 
 namespace Groupping.NET
 {
@@ -34,8 +35,14 @@ namespace Groupping.NET
             [Option('o', "output-file", HelpText = "(Default: {input-file}.out) Output CSV file with clustering results.")]
             public string OutputFile { get; set; }
 
+            [Option('t', "indicator-file", HelpText = "(Deafult: {input-file}.ind.out) Output file with list of clusering indicators.")]
+            public string IndicatorFile { get; set; }
+
             [Option('d', "delimiter", HelpText = "Input CSV file record delimiter.", DefaultValue = ",")]
             public string Delimiter { get; set; }
+
+            [Option('u', "culture", HelpText = "Culture used by the application.", DefaultValue = "en-US")]
+            public string Culture { get; set; }
 
             [Option('h', "has-header", HelpText = "Flag indicating presence of the header record in CSV.", DefaultValue = true)]
             public bool HasHeaderRecord { get; set; }
@@ -55,8 +62,13 @@ namespace Groupping.NET
             if (isValid == false)
                 return;
 
+            SetupCulture(options.Culture);
+
             if (string.IsNullOrEmpty(options.OutputFile))
                 options.OutputFile = $"{options.InputFile}.out";
+
+            if (string.IsNullOrEmpty(options.IndicatorFile))
+                options.IndicatorFile = $"{options.InputFile}.ind.out";
 
             var normalizer = Normalizer.Get(options.NormalizerType);
             var metric = Metric.Get(options.MetricType);
@@ -81,9 +93,6 @@ namespace Groupping.NET
                 options.MaxNeighbour,
                 options.NumLocal).Result;
 
-            Console.WriteLine($"Total cluster distance: {result?.TotalClusterDistance}.");
-            Console.WriteLine($"Global Silhuette index: {result?.GlobalSilhuetteIndex}.");
-
             Console.WriteLine("Writing output file.");
             using (var streamWriter = new StreamWriter(options.OutputFile))
             using (var csv = new CsvWriter(streamWriter))
@@ -94,6 +103,22 @@ namespace Groupping.NET
                 if (result?.Records != null)
                     csv.WriteRecords(result.Records);
             }
+
+            Console.WriteLine("Writing indicator file.");
+            using (var streamWriter = new StreamWriter(options.IndicatorFile))
+            {
+                streamWriter.Write(JsonConvert.SerializeObject(result.Indicators));
+                streamWriter.Flush();
+            }
+        }
+
+        private static void SetupCulture(string cultureString)
+        {
+            var culture = new System.Globalization.CultureInfo(cultureString);
+            System.Threading.Thread.CurrentThread.CurrentCulture = culture;
+            System.Threading.Thread.CurrentThread.CurrentUICulture = culture;
+            System.Globalization.CultureInfo.DefaultThreadCurrentCulture = culture;
+            System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = culture;
         }
 
         static IEnumerable<Record> EnumerateFile(Options options, CsvReader csv)
