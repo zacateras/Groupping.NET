@@ -13,32 +13,38 @@ namespace Groupping.NET
     {
         class Options
         {
-            [Option('f', "input-file", Required = true, HelpText = "Input file to be processed.")]
+            [Option('f', "input-file", Required = true, HelpText = "Input CSV file to be processed.")]
             public string InputFile { get; set; }
 
-            [Option('o', "output-file", HelpText = "Output file with clustering results.")]
-            public string OutputFile { get; set; }
-
-            [Option('d', "delimiter", HelpText = "CSV record delimiter.", DefaultValue = ",")]
-            public string Delimiter { get; set; }
-
-            [Option('h', "has-header-record", HelpText = "Flag indicating presence of the header record in CSV.", DefaultValue = true)]
-            public bool HasHeaderRecord { get; set; }
-
-            [Option('c', "column-names", HelpText = "Attribute column names (separated with comma).")]
-            public string ColumnNames { get; set; }
-
-            [Option('i', "column-nums", HelpText = "Attribute column numbers (separated with comma).")]
-            public string ColumnNums { get; set; }
-
-            [Option('k', "k", HelpText = "Numer of clusters (K).", DefaultValue = 3)]
+            [Option('k', "k", HelpText = "alg. param.: K - number of clusters.", DefaultValue = 3)]
             public int K { get; set; }
 
-            [Option('n', "max-neighbour", HelpText = "Algorithm MaxNeighbour parameter.", DefaultValue = 5)]
+            [Option('n', "max-neighbour", HelpText = "alg. param.: MaxNeighbour.", DefaultValue = 5)]
             public int MaxNeighbour { get; set; }
 
-            [Option('l', "num-local", HelpText = "Algorithm NumLocal parameter.", DefaultValue = 1)]
+            [Option('l', "num-local", HelpText = "alg. param.: NumLocal.", DefaultValue = 1)]
             public int NumLocal { get; set; }
+
+            [Option('z', "normalize", HelpText = "Attribute normalization method used [No, Simple].", DefaultValue = Normalizer.Type.Simple)]
+            public Normalizer.Type NormalizerType { get; set; }
+
+            [Option('m', "metric", HelpText = "Metric used to caluclate distances [Euclidean, Manhattan, Minkowski].", DefaultValue = Metric.Type.Euclidean)]
+            public Metric.Type MetricType { get; set; }
+
+            [Option('o', "output-file", HelpText = "(Default: {input-file}.out) Output CSV file with clustering results.")]
+            public string OutputFile { get; set; }
+
+            [Option('d', "delimiter", HelpText = "Input CSV file record delimiter.", DefaultValue = ",")]
+            public string Delimiter { get; set; }
+
+            [Option('h', "has-header", HelpText = "Flag indicating presence of the header record in CSV.", DefaultValue = true)]
+            public bool HasHeaderRecord { get; set; }
+
+            [Option('c', "column-names", HelpText = "Attribute column names (separated with comma, input CSV file must have a header).")]
+            public string ColumnNames { get; set; }
+
+            [Option('i', "column-nums", HelpText = "Attribute column numbers (separated with comma, input CSV file must not have a header).")]
+            public string ColumnNums { get; set; }
         }
 
         static void Main(string[] args)
@@ -52,6 +58,9 @@ namespace Groupping.NET
             if (string.IsNullOrEmpty(options.OutputFile))
                 options.OutputFile = $"{options.InputFile}.out";
 
+            var normalizer = Normalizer.Get(options.NormalizerType);
+            var metric = Metric.Get(options.MetricType);
+
             Console.WriteLine("Reading input file.");
             Record[] records = null;
             using (var streamReader = new StreamReader(options.InputFile))
@@ -64,12 +73,16 @@ namespace Groupping.NET
             }
 
             Console.WriteLine("Executing the algorithm.");
-            var clarans = new CLARANS<Record>(
+            var result = new CLARANS<Record>(
                 records.ToArray(),
-                new RecordEuclidianDistance(),
+                normalizer,
+                metric,
                 options.K,
                 options.MaxNeighbour,
-                options.NumLocal);
+                options.NumLocal).Result;
+
+            Console.WriteLine($"Total cluster distance: {result?.TotalClusterDistance}.");
+            Console.WriteLine($"Global Silhuette index: {result?.GlobalSilhuetteIndex}.");
 
             Console.WriteLine("Writing output file.");
             using (var streamWriter = new StreamWriter(options.OutputFile))
@@ -78,8 +91,8 @@ namespace Groupping.NET
                 csv.Configuration.Delimiter = options.Delimiter;
                 csv.Configuration.HasHeaderRecord = options.HasHeaderRecord;
 
-                if (clarans?.Result?.ItemResults != null)
-                    csv.WriteRecords(clarans.Result.ItemResults);
+                if (result?.Records != null)
+                    csv.WriteRecords(result.Records);
             }
         }
 

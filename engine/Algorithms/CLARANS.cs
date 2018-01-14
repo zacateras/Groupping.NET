@@ -6,83 +6,30 @@ using MoreLinq;
 
 namespace Groupping.NET.Algorithms
 {
-    public class CLARANSResult
-    {
-        public CLARANSResult(int[] medoids, int[] clusters, double[] distances, double totalDistance)
-        {
-            Medoids = medoids;
-            Clusters = clusters;
-            Distances = distances;
-            TotalDistance = totalDistance;
-        }
-
-        public int[] Medoids { get; }
-
-        public int[] Clusters { get; }
-
-        public double[] Distances { get; }
-
-        public double TotalDistance { get; }
-
-        public IEnumerable<CLARANSItemResult> ItemResults
-        {
-            get
-            {
-                for (int i = 0; i < Clusters.Length; i++)
-                {
-                    yield return new CLARANSItemResult(
-                        index: i,
-                        medoidFlag: Medoids.Any(m => m == i), 
-                        clusterNo: Clusters[i],
-                        distance: Distances[i]);
-                }
-            }
-        }
-    }
-
-    public class CLARANSItemResult
-    {
-        public CLARANSItemResult(int index, bool medoidFlag, int clusterNo, double distance)
-        {
-            Index = index;
-            MedoidFlag = medoidFlag;
-            ClusterNo = clusterNo;
-            Distance = distance;
-        }
-
-        public int Index { get; }
-
-        public bool MedoidFlag { get; }
-
-        public int ClusterNo { get; }
-
-        public double Distance { get; }
-    }
-
     public class CLARANS<T>
     {
         private readonly Random _random = new Random();
 
-        private readonly IDistance<T> _distance;
         private readonly INormalizer<T> _normalizer;
+        private readonly IDistance<T> _distance;
         private readonly int _n;
         private readonly int _k;
         private readonly int _maxNeighbour;
         private readonly int _numLocal;
 
-        public CLARANSResult Result { get; }
+        public Result<T> Result { get; }
 
         public CLARANS(
             T[] items,
-            IDistance<T> distance,
             INormalizer<T> normalizer,
+            IDistance<T> distance,
             int k,
             int maxNeighbour,
             int numLocal,
             int degreeOfParallelism = 4)
         {
-            _distance = distance;
             _normalizer = normalizer;
+            _distance = distance;
             _n = items.Length;
             _k = k;
             _maxNeighbour = maxNeighbour;
@@ -92,11 +39,18 @@ namespace Groupping.NET.Algorithms
                 .Normalize(items)
                 .ToArray();
 
-            Result = Enumerable.Range(0, numLocal)
+            var claransResult = Enumerable.Range(0, numLocal)
                 .AsParallel()
                 .WithDegreeOfParallelism(degreeOfParallelism)
                 .Select(_ => OptimizeOne(itemsNorm))
-                .MaxBy(result => result.TotalDistance);
+                .MaxBy(result => result.TotalClusterDistance);
+
+            Result = new Result<T>(
+                items,
+                _distance,
+                _k,
+                claransResult.MedoidIndices,
+                claransResult.ClusterNums);
         }
 
         private CLARANSResult OptimizeOne(T[] items)
@@ -235,6 +189,25 @@ namespace Groupping.NET.Algorithms
             }
 
             return distances.Sum();
+        }
+
+        private class CLARANSResult
+        {
+            public CLARANSResult(int[] medoidIndices, int[] clusterNums, double[] clusterDistances, double totalClusterDistance)
+            {
+                MedoidIndices = medoidIndices;
+                ClusterNums = clusterNums;
+                ClusterDistances = clusterDistances;
+                TotalClusterDistance = totalClusterDistance;
+            }
+
+            public int[] MedoidIndices { get; }
+
+            public int[] ClusterNums { get; }
+
+            public double[] ClusterDistances { get; }
+
+            public double TotalClusterDistance { get; }
         }
     }
 }
